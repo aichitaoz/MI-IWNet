@@ -1,208 +1,140 @@
 # MI-IWNet
 
-MI-IWNet is a research codebase for oceanic internal wave segmentation from
-multi-source satellite imagery. The repository focuses on joint training and
-inference for SAR and RGB data, with multiple segmentation backbones, shared
-multi-modal design choices, and a collection of analysis scripts used for
-figure generation and case studies.
+This repository contains the PyTorch implementation of `MI-IWNet`, a
+multi-source internal wave segmentation framework for SAR and RGB satellite
+imagery. The codebase accompanies the corresponding research manuscript and
+includes training, inference, and analysis scripts used in the study.
 
-This repository is best understood as a code release rather than a packaged
-benchmark. Large datasets are not included, and several paths in the training
-and inference scripts are written for the author's remote Linux environment.
+## Overview
 
-## Highlights
+MI-IWNet is designed for oceanic internal wave extraction under heterogeneous
+imaging conditions. The current repository supports:
 
-- Joint SAR and RGB segmentation workflow.
-- Shared multi-modal training pipeline with alternating modality batches.
-- Support for multiple backbone families, including ConvNeXt-based U-Net,
-  UNet++, SegFormer, TransUNet, SwinUNet, IWResNet, IWENet, and MTU2Net.
-- Patch-based training and inference for large satellite images.
-- Dynamic filtering of sparse RGB patches during training.
-- Training logs, checkpoints, and metric curves saved automatically.
+- joint SAR and RGB training
+- alternating multi-modal optimization
+- patch-based segmentation for large images
+- multiple comparative backbones
+- analysis scripts used for figure generation and case studies
+
+The repository should be viewed as a research code release. Large-scale
+datasets are not included in this public version.
 
 ## Repository Structure
 
 ```text
 MI-IWNet/
-|-- configs/        Training configuration
-|-- models/         Segmentation models and backbone modules
-|-- train/          Training entrypoint, loops, logging, and loaders
-|-- utils/          Dataset classes, transforms, and data preparation
-|-- data_utils/     Inference, visualization, and helper scripts
-|-- analysis/       Analysis code, generated figures, and case-study outputs
-|-- .gitignore
+|-- configs/        experiment configuration
+|-- models/         network definitions and backbone modules
+|-- train/          training entrypoints and optimization loops
+|-- utils/          dataset preparation and loading utilities
+|-- data_utils/     inference and visualization scripts
+|-- analysis/       analysis code and supplementary outputs
 `-- README.md
 ```
 
-Core directories:
+Main components:
 
-- `configs/`: central experiment settings in `configs/train_config.py`
-- `train/`: training entrypoint in `train/main.py`
-- `utils/`: paired-data preparation and dataset loading
-- `data_utils/`: standalone SAR and RGB inference scripts
-- `analysis/`: supplementary scripts and outputs; not required for model
-  training
+- `train/main.py`: training entrypoint
+- `configs/train_config.py`: dataset paths and experiment settings
+- `utils/prepare_data.py`: image-mask pairing and data split
+- `utils/InterWaveDataset.py`: patch-based dataset loader
+- `data_utils/inference_sar.py`: SAR inference script
+- `data_utils/inference_rgb.py`: RGB inference script
 
-## Data Layout
+## Models
 
-The default configuration expects data under a Linux-style root such as:
-
-```text
-/home/.../internal_wave_detection_project/IW_data/
-|-- images_sar/
-|-- masks_sar/
-|-- images_rgb/
-`-- masks_rgb/
-```
-
-Important notes:
-
-- Image files and mask files are matched by filename stem.
-- `utils/prepare_data.py` automatically pairs files and splits them into
-  train, validation, and test subsets.
-- By default, the split ratio in `configs/train_config.py` is `0.7 / 0.2 / 0.1`.
-- During preparation, paired samples are copied into:
-
-```text
-DATA_ROOT/
-|-- SAR/
-|   |-- train/
-|   |-- val/
-|   `-- test/
-`-- RGB/
-    |-- train/
-    |-- val/
-    `-- test/
-```
-
-### Modality Notes
-
-- SAR inputs may be `jpg`, `png`, `tif`, or `tiff`.
-- SAR JPG files should be treated as plain imagery without reliable
-  georeferencing.
-- SAR TIFF files may contain useful geographic extent in TIFF tags even when
-  CRS or affine transform metadata is not meaningful.
-- RGB TIFF files in the author's dataset are treated as imagery inputs rather
-  than as per-file georeferenced tiles.
-
-## Environment Setup
-
-There is no pinned `requirements.txt` in this repository yet, so dependencies
-need to be installed manually.
-
-Recommended baseline environment:
-
-- Python 3.8+
-- PyTorch with CUDA support if you plan to train on GPU
-
-Typical packages used by the current code:
-
-```bash
-pip install numpy opencv-python matplotlib scikit-learn albumentations tifffile tqdm lion-pytorch timm
-```
-
-Some backbone components also reference OpenMMLab libraries. If you use those
-variants, install versions of `mmcv` and related packages that are compatible
-with your PyTorch and CUDA stack.
-
-## Configuration
-
-Before training or inference, review `configs/train_config.py`.
-
-Key fields include:
-
-- `DATA_ROOT`
-- `SAR_IMAGE_DIR`
-- `RGB_IMAGE_DIR`
-- `SAR_MASK_DIR`
-- `RGB_MASK_DIR`
-- `MODEL_TYPE`
-- `IMG_SIZE`
-- `BATCH_SIZE`
-- `NUM_EPOCHS`
-- `LOG_SAVE_DIR`
-- `PTH_SAVE_DIR`
-- `FIG_SAVE_DIR`
-
-Supported model names listed in the config include:
+The repository currently includes the following model options in
+`configs/train_config.py`:
 
 ```text
 unet, ConvNeXt, UNetPlusPlus, SegFormer, TransUNet,
 IWResNet, SwinUNet, IWENet, mtu2net
 ```
 
+These models are used either as the main framework components or as comparison
+baselines in the experimental workflow.
+
+## Data
+
+The present code assumes a local or remote dataset root defined in
+`configs/train_config.py`. By default, SAR and RGB images are organized
+separately and paired with their segmentation masks by filename stem.
+
+Expected directory pattern:
+
+```text
+DATA_ROOT/
+|-- images_sar/
+|-- masks_sar/
+|-- images_rgb/
+`-- masks_rgb/
+```
+
+After pairing, `utils/prepare_data.py` splits the data into train, validation,
+and test subsets according to the configured ratios.
+
+The original research data are not distributed in this repository.
+
 ## Training
 
-1. Edit dataset paths and output paths in `configs/train_config.py`.
-2. Select the desired `MODEL_TYPE`.
-3. Start training:
+Before training, modify the dataset and output paths in
+`configs/train_config.py`, then run:
 
 ```bash
 python train/main.py
 ```
 
-What the training pipeline currently does:
-
-- pairs SAR and RGB images with masks by filename stem
-- creates train/val/test splits
-- loads SAR and RGB through dedicated dataset logic
-- filters low-positive RGB patches during training
-- trains with alternating modality batches
-- logs metrics including IoU, Dice, Precision, Recall, Accuracy, and BF Score
-
-Outputs are saved under the directories specified in the config, such as
-checkpoints, logs, metric curves, and best-model weights.
+The current training pipeline includes paired data preparation, patch-based
+loading, alternating SAR/RGB batches, and checkpoint saving.
 
 ## Inference
 
-Two standalone scripts are provided:
-
-- `data_utils/inference_sar.py`
-- `data_utils/inference_rgb.py`
-
-Before running them, update the hardcoded paths inside each script:
-
-- model checkpoint path
-- input image directory
-- output directory
-
-Run SAR inference:
+Two standalone inference scripts are provided:
 
 ```bash
 python data_utils/inference_sar.py
-```
-
-Run RGB inference:
-
-```bash
 python data_utils/inference_rgb.py
 ```
 
-The scripts save predicted masks and visualization overlays for each input
-image.
+Please update the checkpoint path and input/output directories in the scripts
+before execution.
 
-## Analysis Folder
+## Environment
 
-The `analysis/` directory contains figure-generation scripts, region-specific
-case-study outputs, and other research artifacts. These files are useful for
-reproducing visual analysis, but they are not required for the core training
-pipeline in `train/` and `utils/`.
+This repository does not yet provide a fixed `requirements.txt`. The current
+codebase mainly depends on:
 
-## Current Limitations
+- Python 3.8+
+- PyTorch
+- OpenCV
+- NumPy
+- Albumentations
+- scikit-learn
+- tifffile
+- tqdm
+- lion-pytorch
+- timm
 
-- Dataset paths are still configured for a personal remote environment.
-- Dependency installation is manual because the repository does not yet include
-  a pinned environment file.
-- Some scripts use hardcoded input and output paths.
-- This repository includes research outputs alongside reusable training code,
-  so not every file is part of the minimal training workflow.
+Some backbone implementations may additionally require OpenMMLab-related
+packages such as `mmcv`.
 
-## Suggested Next Steps
+## Analysis Scripts
 
-If you plan to keep maintaining this repository, the most helpful follow-up
-cleanup items are:
+The `analysis/` directory contains scripts and generated outputs used in the
+manuscript-level analysis, including regional case studies, visualization, and
+figure preparation. These files are supplementary to the core training and
+inference pipeline.
 
-1. add a `requirements.txt` or `environment.yml`
-2. move hardcoded paths into config files or CLI arguments
-3. further tighten `.gitignore` for generated figures, caches, and temporary
-   outputs
+## Citation
+
+If you use this repository in academic work, please cite the corresponding
+paper. The formal citation can be added here after publication.
+
+```bibtex
+@article{mi_iwnet,
+  title   = {MI-IWNet},
+  author  = {},
+  journal = {},
+  year    = {}
+}
+```
